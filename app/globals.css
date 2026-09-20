@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  body { @apply bg-mist text-kelp font-sans antialiased; font-feature-settings: 'tnum' 1; }
+  h1, h2, h3 { @apply font-display tracking-tight; }
+  :focus-visible { outline: 3px solid #2F7F79; outline-offset: 3px; border-radius: 6px; }
+  ::selection { background: #F5B83D; color: #10312B; }
+}
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[15px] font-semibold transition duration-200 active:scale-[.98] disabled:opacity-60 disabled:pointer-events-none; }
+  .btn-primary { @apply bg-marigold text-kelp hover:bg-[#f8c657] hover:-translate-y-0.5 hover:shadow-[0_10px_24px_-10px_rgba(245,184,61,.9)]; }
+  .btn-dark { @apply bg-kelp text-paper hover:bg-[#1b4a41]; }
+  .btn-ghost { @apply border border-kelp/25 text-kelp hover:bg-kelp/5; }
+  .btn-danger { @apply border border-red-700/30 text-red-800 hover:bg-red-50; }
+  .btn-sm { @apply px-4 py-2 text-sm; }
+
+  .field { @apply w-full rounded-xl border border-kelp/20 bg-white px-4 py-3 text-[15px] text-kelp placeholder:text-kelp/40 transition focus:border-tide focus:outline-none focus:ring-2 focus:ring-tide/30; }
+  .label { @apply mb-1.5 block text-sm font-semibold text-kelp; }
+  .hint { @apply mt-1.5 text-sm text-kelp/60; }
+
+  .panel { @apply rounded-2xl bg-paper p-6 shadow-[0_1px_0_rgba(16,49,43,.06),0_18px_40px_-28px_rgba(16,49,43,.35)]; }
+  .pill { @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold; }
+
+  .th { @apply px-4 py-3 text-left text-xs font-semibold text-kelp/60; }
+  .td { @apply px-4 py-3 text-sm align-middle; }
+}
+
+/* The one continuous motion on the site: ripples spreading from a single gift. */
+@keyframes ripple {
+  0%   { transform: scale(.14); opacity: .95; }
+  100% { transform: scale(1);   opacity: 0; }
+}
+.ripple-ring {
+  position: absolute; inset: 0; border-radius: 9999px;
+  border: 2px solid rgba(245, 184, 61, .75);
+  animation: ripple 7.2s cubic-bezier(.2,.6,.3,1) infinite;
+  transform: scale(.14); opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ripple-ring { animation: none; opacity: .4; transform: scale(var(--s, .5)); }
+  html { scroll-behavior: auto; }
+}
