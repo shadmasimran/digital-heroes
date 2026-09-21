@@ -1,13 +1,14 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { noStoreFetch } from '@/lib/supabase/fetch';
+import { cleanEnv } from '@/lib/supabase/env';
 
 /** Supabase client bound to the current request's user session (respects RLS). */
 export function createClient() {
   const cookieStore = cookies();
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
     {
       global: { fetch: noStoreFetch },
       cookies: {
