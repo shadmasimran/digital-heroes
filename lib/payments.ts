@@ -8,7 +8,9 @@ type Plan = 'monthly' | 'yearly';
  * Record a successful subscription payment:
  *  1. upsert the user's subscription (active until the period end)
  *  2. write the charity's share to the contributions ledger (idempotent via external_ref)
- * Called by the Stripe webhook and by demo checkout.
+ * Called by the Stripe webhook, the Stripe success page and the test checkout.
+ * Throws with the database's message if the subscription cannot be saved, so callers never
+ * show "success" for a payment that was not recorded.
  */
 export async function recordSubscriptionPayment(opts: {
   userId: string;
@@ -28,7 +30,7 @@ export async function recordSubscriptionPayment(opts: {
     if (seen) return;
   }
 
-  await admin.from('subscriptions').upsert(
+  const { error: subError } = await admin.from('subscriptions').upsert(
     {
       user_id: opts.userId,
       plan: opts.plan,
@@ -42,16 +44,22 @@ export async function recordSubscriptionPayment(opts: {
     },
     { onConflict: 'user_id' }
   );
+  if (subError) {
+    console.error('recordSubscriptionPayment: subscription upsert failed', subError);
+    throw new Error(subError.message);
+  }
 
   const { data: profile } = await admin.from('profiles').select('charity_id,charity_percent').eq('id', opts.userId).maybeSingle();
   if (profile?.charity_id) {
-    await admin.from('contributions').insert({
+    const { error: ledgerError } = await admin.from('contributions').insert({
       user_id: opts.userId,
       charity_id: profile.charity_id,
       amount_cents: Math.floor((opts.amountCents * (profile.charity_percent || 10)) / 100),
       source: 'subscription',
       external_ref: opts.externalRef ?? null,
     });
+    // The subscription is already active, so a ledger problem must not undo the purchase — but it must be visible.
+    if (ledgerError) console.error('recordSubscriptionPayment: charity ledger insert failed', ledgerError);
   }
 }
 
@@ -62,11 +70,15 @@ export async function recordDonation(opts: { userId: string; charityId: string; 
     const { data: seen } = await admin.from('contributions').select('id').eq('external_ref', opts.externalRef).maybeSingle();
     if (seen) return;
   }
-  await admin.from('contributions').insert({
+  const { error } = await admin.from('contributions').insert({
     user_id: opts.userId,
     charity_id: opts.charityId,
     amount_cents: opts.amountCents,
     source: 'donation',
     external_ref: opts.externalRef ?? null,
   });
+  if (error) {
+    console.error('recordDonation failed', error);
+    throw new Error(error.message);
+  }
 }

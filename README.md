@@ -133,3 +133,7 @@ supabase/schema.sql  tables, RLS, triggers, storage bucket, seeds
 4. `/dashboard`: the subscription appears as **Active**, and score entry and draw entry unlock.
 
 **With Stripe keys instead** (`STRIPE_SECRET_KEY` set, `DEMO_PAYMENTS` unset), the same flow uses Stripe's hosted Checkout in test mode (card `4242 4242 4242 4242`). Prices are sent inline (`price_data`), so no Stripe Price IDs exist to be misconfigured. The success page verifies the Checkout Session with Stripe itself, so activation does not depend on the webhook arriving first (the webhook still handles renewals and cancellations, idempotently).
+
+## 9. Deployment self-check
+
+`GET /api/health` returns a small JSON report (no secrets): whether each Supabase key has the right role (`anon` / `service_role`), whether the database is reachable with each key, and whether test payments are enabled. If payments or admin pages misbehave after a deploy, check this first. Delete `app/api/health` if you do not want it public.

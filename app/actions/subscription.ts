@@ -11,6 +11,7 @@ import { stripe, demoPayments, paymentsConfigured } from '@/lib/stripe';
 import { recordDonation, recordSubscriptionPayment } from '@/lib/payments';
 import { getSiteUrl } from '@/lib/site';
 import { validateTestCard } from '@/lib/testcards';
+import { subscriptionState } from '@/lib/subscription';
 
 const planOf = (v: FormDataEntryValue | null): 'monthly' | 'yearly' | null =>
   v === 'monthly' || v === 'yearly' ? v : null;
@@ -77,7 +78,19 @@ export async function completeDemoPayment(formData: FormData) {
   const settings = await getSettings();
   const amountCents = plan === 'yearly' ? settings.yearly_price_cents : settings.monthly_price_cents;
   const ref = `demo_${randomUUID()}`;
-  await recordSubscriptionPayment({ userId: v.user.id, plan: plan!, amountCents, externalRef: ref });
+  try {
+    await recordSubscriptionPayment({ userId: v.user.id, plan: plan!, amountCents, externalRef: ref });
+  } catch (e) {
+    // Show the real reason instead of a false "success" (e.g. a database or key problem).
+    console.error('completeDemoPayment failed', e);
+    flash(back, 'error', `The payment could not be recorded: ${(e as Error).message}`);
+  }
+
+  // Read the subscription back with the service client to be certain it really is active.
+  const { data: saved } = await createAdminClient()
+    .from('subscriptions').select('status,current_period_end').eq('user_id', v.user.id).maybeSingle();
+  if (subscriptionState(saved) !== 'active')
+    flash(back, 'error', 'The payment went through but the subscription could not be confirmed. Please try again.');
 
   const okCard = card as { ok: true; last4: string };
   redirect(`/subscribe/success?ref=${ref.slice(-8).toUpperCase()}&card=${okCard.last4}`);

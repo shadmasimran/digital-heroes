@@ -1,5 +1,7 @@
 import Link from 'next/link';
-import { getViewer, requireUser } from '@/lib/auth';
+import { requireUser } from '@/lib/auth';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { subscriptionState } from '@/lib/subscription';
 import { createClient } from '@/lib/supabase/server';
 import { stripe } from '@/lib/stripe';
 import { recordSubscriptionPayment } from '@/lib/payments';
@@ -45,9 +47,13 @@ export default async function SuccessPage({ searchParams }: { searchParams: { se
     }
   }
 
-  const v = (await getViewer())!;
-  const sub = v.subscription;
-  const active = v.subState === 'active' && sub;
+  // Read the subscription with the service client (filtered to THIS user) so the confirmation
+  // reflects what was actually written, independent of RLS or caching.
+  const { data: sub, error: subError } = await createAdminClient()
+    .from('subscriptions').select('*').eq('user_id', first.user.id).maybeSingle();
+  if (subError && !problem) problem = `We could not read your subscription: ${subError.message}`;
+  const v = first;
+  const active = sub && subscriptionState(sub) === 'active';
 
   if (!active) {
     return (
