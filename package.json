@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "tsx tests/draw.test.ts",
+    "test": "tsx tests/draw.test.ts && tsx tests/payment.test.ts",
     "seed": "node --env-file=.env.local scripts/seed-users.mjs"
   },
   "dependencies": {

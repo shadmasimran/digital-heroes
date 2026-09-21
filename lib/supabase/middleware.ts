@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PROTECTED = ['/dashboard', '/admin', '/subscribe'];
+const PROTECTED = ['/dashboard', '/admin', '/subscribe', '/checkout'];
 
 /** Refreshes the auth session cookie and gates protected routes. */
 export async function updateSession(request: NextRequest) {

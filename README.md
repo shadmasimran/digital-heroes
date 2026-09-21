@@ -18,7 +18,7 @@ cp .env.example .env.local      # then fill in the values (see below)
 2. In Supabase go to *Authentication → Providers → Email* and **turn off "Confirm email"** so reviewers can sign up and continue immediately.
 3. Copy *Project URL*, *anon key* and *service_role key* (Settings → API) into `.env.local`.
 4. Payments — pick one:
-   * **Demo mode (no Stripe account):** set `DEMO_PAYMENTS=true`. Subscribing and donating are simulated instantly.
+   * **Test checkout (no Stripe account):** set `DEMO_PAYMENTS=true`. Subscribing opens a built-in checkout page where you enter a test card (see §8).
    * **Stripe test mode:** set `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` (see §3) and leave `DEMO_PAYMENTS` unset.
 5. Create the reviewer accounts and demo data, then start the app:
 
@@ -113,3 +113,23 @@ supabase/schema.sql  tables, RLS, triggers, storage bucket, seeds
 * Publishing a draw performs several writes without a single DB transaction (the "claim" step guarantees it can only run once, but a mid-way crash would need a manual retry). A Postgres function would make it fully atomic.
 * Email notifications (winner alerts, renewal reminders) are not included; in-app status is used instead.
 * Charity images are URL-based; there is no image upload for charities.
+
+## 8. Test payment flow
+
+**Monthly (or Yearly) plan → Payment page → Payment successful → Subscription active**
+
+1. `/subscribe`: choose a plan and click **Continue to payment**.
+2. `/checkout`: an order summary (plan, price, charity share) and a card form. Use a test card:
+
+| Card number | Result |
+|---|---|
+| `4242 4242 4242 4242` | Payment succeeds |
+| `5555 5555 5555 4444` | Payment succeeds (Mastercard) |
+| `4000 0000 0000 0002` | Card declined |
+| `4000 0000 0000 9995` | Insufficient funds |
+
+   Any future expiry (e.g. `12/30`) and any 3-digit CVC. The **Fill in the test card for me** link completes the form in one click. Real card numbers are refused, and card data is validated then discarded — it is never stored or logged.
+3. `/subscribe/success`: **Payment successful** with plan, amount, renewal date, charity share and a reference. It only ever shows success when the database says the subscription is active.
+4. `/dashboard`: the subscription appears as **Active**, and score entry and draw entry unlock.
+
+**With Stripe keys instead** (`STRIPE_SECRET_KEY` set, `DEMO_PAYMENTS` unset), the same flow uses Stripe's hosted Checkout in test mode (card `4242 4242 4242 4242`). Prices are sent inline (`price_data`), so no Stripe Price IDs exist to be misconfigured. The success page verifies the Checkout Session with Stripe itself, so activation does not depend on the webhook arriving first (the webhook still handles renewals and cancellations, idempotently).

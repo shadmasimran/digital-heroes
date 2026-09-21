@@ -9,23 +9,30 @@ import { flash } from '@/lib/flash';
 import { getSettings } from '@/lib/settings';
 import { stripe, demoPayments, paymentsConfigured } from '@/lib/stripe';
 import { recordDonation, recordSubscriptionPayment } from '@/lib/payments';
-import { SITE_URL } from '@/lib/brand';
+import { getSiteUrl } from '@/lib/site';
+import { validateTestCard } from '@/lib/testcards';
 
+const planOf = (v: FormDataEntryValue | null): 'monthly' | 'yearly' | null =>
+  v === 'monthly' || v === 'yearly' ? v : null;
+
+/**
+ * Step 1 of the payment flow: the user picked a plan.
+ *  - Stripe configured  -> hosted Stripe Checkout (test or live keys)
+ *  - Demo/test payments -> the built-in test checkout page (/checkout)
+ * Prices are sent inline (price_data), so no Stripe Price IDs are needed.
+ */
 export async function startCheckout(formData: FormData) {
   const v = await requireUser();
-  const plan = String(formData.get('plan') ?? '') as 'monthly' | 'yearly';
-  if (plan !== 'monthly' && plan !== 'yearly') flash('/subscribe', 'error', 'Choose a plan.');
+  const plan = planOf(formData.get('plan'));
+  if (!plan) flash('/subscribe', 'error', 'Choose a plan.');
   if (!paymentsConfigured) flash('/subscribe', 'error', 'Payments are not configured on this deployment.');
   if (!v.profile?.charity_id) flash('/subscribe', 'error', 'Pick a charity on your dashboard first.');
 
+  if (demoPayments) redirect(`/checkout?plan=${plan}`);
+
   const settings = await getSettings();
   const amountCents = plan === 'yearly' ? settings.yearly_price_cents : settings.monthly_price_cents;
-
-  if (demoPayments) {
-    await recordSubscriptionPayment({ userId: v.user.id, plan, amountCents, externalRef: `demo_${randomUUID()}` });
-    flash('/dashboard', 'msg', `Your ${plan} subscription is active (demo payment).`);
-  }
-
+  const site = getSiteUrl();
   const session = await stripe!.checkout.sessions.create({
     mode: 'subscription',
     customer_email: v.user.email,
@@ -38,12 +45,42 @@ export async function startCheckout(formData: FormData) {
         product_data: { name: `Ripple Rounds ${plan} plan` },
       },
     }],
-    metadata: { user_id: v.user.id, plan, kind: 'subscription' },
-    subscription_data: { metadata: { user_id: v.user.id, plan } },
-    success_url: `${SITE_URL}/dashboard?msg=${encodeURIComponent('Payment received. Your subscription is being activated.')}`,
-    cancel_url: `${SITE_URL}/subscribe?error=${encodeURIComponent('Checkout was cancelled.')}`,
+    metadata: { user_id: v.user.id, plan: plan!, kind: 'subscription' },
+    subscription_data: { metadata: { user_id: v.user.id, plan: plan! } },
+    // The success page verifies the session itself, so activation never depends on webhook timing.
+    success_url: `${site}/subscribe/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${site}/subscribe?error=${encodeURIComponent('Checkout was cancelled.')}`,
   });
   redirect(session.url!);
+}
+
+/**
+ * Step 2 (test checkout): the user "pays" with a test card.
+ * Card details are validated and immediately discarded — nothing is stored or logged.
+ * The price is always read from the server-side settings, never from the form.
+ */
+export async function completeDemoPayment(formData: FormData) {
+  const v = await requireUser();
+  const plan = planOf(formData.get('plan'));
+  if (!plan) flash('/subscribe', 'error', 'Choose a plan.');
+  if (!demoPayments) flash('/subscribe', 'error', 'Test payments are not enabled on this deployment.');
+  const back = `/checkout?plan=${plan}`;
+
+  const card = validateTestCard({
+    name: String(formData.get('name') ?? ''),
+    number: String(formData.get('number') ?? ''),
+    expiry: String(formData.get('expiry') ?? ''),
+    cvc: String(formData.get('cvc') ?? ''),
+  });
+  if (!card.ok) flash(back, 'error', card.error);
+
+  const settings = await getSettings();
+  const amountCents = plan === 'yearly' ? settings.yearly_price_cents : settings.monthly_price_cents;
+  const ref = `demo_${randomUUID()}`;
+  await recordSubscriptionPayment({ userId: v.user.id, plan: plan!, amountCents, externalRef: ref });
+
+  const okCard = card as { ok: true; last4: string };
+  redirect(`/subscribe/success?ref=${ref.slice(-8).toUpperCase()}&card=${okCard.last4}`);
 }
 
 export async function cancelSubscription() {
@@ -91,15 +128,16 @@ export async function startDonation(formData: FormData) {
 
   if (demoPayments) {
     await recordDonation({ userId: v.user.id, charityId, amountCents, externalRef: `demo_${randomUUID()}` });
-    flash(back, 'msg', 'Thank you — your donation has been recorded (demo payment).');
+    flash(back, 'msg', 'Thank you — your donation has been recorded (test payment).');
   }
+  const site = getSiteUrl();
   const session = await stripe!.checkout.sessions.create({
     mode: 'payment',
     customer_email: v.user.email,
     line_items: [{ quantity: 1, price_data: { currency: 'inr', unit_amount: amountCents, product_data: { name: 'Charity donation' } } }],
     metadata: { kind: 'donation', user_id: v.user.id, charity_id: charityId },
-    success_url: `${SITE_URL}${back}?msg=${encodeURIComponent('Thank you for your donation.')}`,
-    cancel_url: `${SITE_URL}${back}`,
+    success_url: `${site}${back}?msg=${encodeURIComponent('Thank you for your donation.')}`,
+    cancel_url: `${site}${back}`,
   });
   redirect(session.url!);
 }

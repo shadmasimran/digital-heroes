@@ -53,7 +53,7 @@ export default async function SubscribePage({ searchParams }: { searchParams: { 
                   About {money(Math.floor((p.price * pct) / 100))} of this payment goes to your charity.
                 </p>
                 <SubmitButton className={`btn mt-5 ${featured ? 'btn-primary' : 'btn-dark'}`} pending="One moment…">
-                  Subscribe {p.id === 'yearly' ? 'yearly' : 'monthly'}
+                  Continue to payment
                 </SubmitButton>
               </form>
             );
@@ -61,7 +61,7 @@ export default async function SubscribePage({ searchParams }: { searchParams: { 
         </div>
       )}
       {demoPayments && (
-        <p className="mt-6 text-sm text-kelp/60">Demo mode: payments are simulated so you can test the full flow. No card is charged.</p>
+        <p className="mt-6 text-sm text-kelp/60">Test mode: the next step is a checkout page where you enter a test card (4242 4242 4242 4242). No real card is charged.</p>
       )}
     </div>
   );
